@@ -90,8 +90,13 @@ python tools/build.py       (all versions)      python tools/build.py 26     (on
 The new zips land in `dist/`. The build checks every row and stops with the row number if something is wrong
 (missing answer, bad letter, duplicate ID).
 
-Defaults for a fresh world (difficulty, interval, score display, which rewards/punishments start switched off, whether
-the menu opens on first join) are the constants at the top of `tools/build.py`.
+## Settings for every world
+
+A data pack can only save things inside one world - a new world always starts from scratch, and nothing in vanilla
+can carry settings from world to world. So the settings that should apply **everywhere** are baked into the zip:
+open the **Settings** sheet of `questions.xlsx`, set difficulty, interval, score display, menu-on-first-join and
+On/Off for every single reward and punishment, save, rebuild. Every world you then create, on every version, starts
+exactly like that. Changes made in game (menu / options) still apply to that world only.
 
 ## Repository layout
 

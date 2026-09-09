@@ -128,6 +128,96 @@ def write_questions(path, questions):
     wb.save(path)
 
 
+SETTINGS_ROWS = [   # (label, default, note)  - the general settings at the top of the Settings sheet
+    ("Difficulty", "Normal", "Normal or Hard"),
+    ("Interval (minutes)", 5, "1 - 30, minutes between questions"),
+    ("Score display", "On", "On or Off - the sidebar with next question / correct / wrong"),
+    ("Menu on first join", "Off", "On = the menu opens once per world when you join"),
+]
+
+
+def write_settings_sheet(path, rewards, punishments):
+    """Adds (or replaces) the Settings sheet: general settings, then one On/Off row per reward and punishment.
+    rewards / punishments: lists of (key, name)."""
+    wb = openpyxl.load_workbook(path)
+    if "Settings" in wb.sheetnames:
+        del wb["Settings"]
+    ws = wb.create_sheet("Settings", 1)
+    ws.column_dimensions["A"].width = 26
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 70
+    head = Font(bold=True, color="FFFFFF")
+    fill = PatternFill("solid", fgColor="2F5597")
+
+    def header(*cells):
+        ws.append(list(cells))
+        for c in range(1, len(cells) + 1):
+            ws.cell(row=ws.max_row, column=c).font = head
+            ws.cell(row=ws.max_row, column=c).fill = fill
+    header("Setting", "Value", "What it does - these are the values EVERY new world starts with (rebuild after editing)")
+    for label, default, note in SETTINGS_ROWS:
+        ws.append([label, default, note])
+    ws.append([])
+    header("Rewards", "On/Off", "Off = can never happen (you can still switch it in game, per world)")
+    for _, name in rewards:
+        ws.append([name, "On"])
+    ws.append([])
+    header("Punishments", "On/Off", "Off = can never happen")
+    for _, name in punishments:
+        ws.append([name, "On"])
+    onoff = DataValidation(type="list", formula1='"On,Off"', allow_blank=True)
+    diff = DataValidation(type="list", formula1='"Normal,Hard"', allow_blank=True)
+    ws.add_data_validation(onoff)
+    ws.add_data_validation(diff)
+    diff.add("B2")
+    onoff.add("B4:B5")
+    onoff.add(f"B7:B{ws.max_row}")
+    ws.freeze_panes = "A2"
+    wb.save(path)
+
+
+def read_settings(path, rewards, punishments):
+    """Returns {"diff": 1|2, "interval": int, "sidebar": 0|1, "auto_menu": bool, "off_rewards": [keys], "off_punishments": [keys]}
+    or None when the workbook has no Settings sheet."""
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    if "Settings" not in wb.sheetnames:
+        return None
+    by_name = {"Rewards": {name: key for key, name in rewards}, "Punishments": {name: key for key, name in punishments}}
+    out = {"diff": 1, "interval": 5, "sidebar": 1, "auto_menu": False, "off_rewards": [], "off_punishments": []}
+    section, problems = None, []
+    for rno, row in enumerate(wb["Settings"].iter_rows(values_only=True), 1):
+        label, value = (_s(row[0]) if row else ""), (_s(row[1]) if row and len(row) > 1 else "")
+        if not label:
+            continue
+        if label in by_name:
+            section = label
+            continue
+        if section:
+            key = by_name[section].get(label)
+            if key is None:
+                problems.append(f"Settings row {rno}: unknown {section[:-1].lower()} {label!r}")
+            elif value.lower() == "off":
+                out["off_rewards" if section == "Rewards" else "off_punishments"].append(key)
+            elif value.lower() not in ("on", ""):
+                problems.append(f"Settings row {rno}: {label}: use On or Off")
+        elif label == "Difficulty":
+            if value.capitalize() not in ("Normal", "Hard"):
+                problems.append(f"Settings row {rno}: Difficulty must be Normal or Hard")
+            out["diff"] = 2 if value.capitalize() == "Hard" else 1
+        elif label == "Interval (minutes)":
+            try:
+                out["interval"] = max(1, min(30, int(float(value))))
+            except ValueError:
+                problems.append(f"Settings row {rno}: Interval must be a number 1-30")
+        elif label == "Score display":
+            out["sidebar"] = 0 if value.lower() == "off" else 1
+        elif label == "Menu on first join":
+            out["auto_menu"] = value.lower() == "on"
+    if problems:
+        sys.exit(f"{path}: fix the Settings sheet first:\n  " + "\n  ".join(problems))
+    return out
+
+
 if __name__ == "__main__":  # quick check:  python questions_xlsx.py ../questions.xlsx
     qs = read_questions(sys.argv[1])
     print(len(qs), "questions,", sum(q["pool"] == "N" for q in qs), "Normal,", sum(q["pool"] == "H" for q in qs), "Hard")

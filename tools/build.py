@@ -1162,6 +1162,26 @@ def lint(stage, t):
     return problems
 
 
+def apply_settings_sheet():
+    """The Settings sheet of questions.xlsx overrides the DEFAULT_* constants: what every new world starts with.
+    A missing sheet is created with the current defaults so it can be edited next time."""
+    global DEFAULT_DIFF, DEFAULT_INTERVAL_MIN, DEFAULT_SIDEBAR, AUTO_MENU, DISABLED_REWARDS, DISABLED_PUNISHMENTS
+    from questions_xlsx import read_settings, write_settings_sheet
+    full = TARGETS["26"]   # the target that has every reward / punishment
+    rewards = [(r[0], r[1]) for r in REWARDS(full)]
+    punishments = [(p[0], p[1]) for p in PUNISHMENTS(full)]
+    s = read_settings(XLSX, rewards, punishments)
+    if s is None:
+        write_settings_sheet(XLSX, rewards, punishments)
+        print("added a Settings sheet to questions.xlsx (defaults)")
+        return
+    DEFAULT_DIFF, DEFAULT_INTERVAL_MIN, DEFAULT_SIDEBAR, AUTO_MENU = s["diff"], s["interval"], s["sidebar"], s["auto_menu"]
+    DISABLED_REWARDS, DISABLED_PUNISHMENTS = s["off_rewards"], s["off_punishments"]
+    print(f"settings: {'Hard' if DEFAULT_DIFF == 2 else 'Normal'}, every {DEFAULT_INTERVAL_MIN} min, score display "
+          f"{'on' if DEFAULT_SIDEBAR else 'off'}, menu on first join {'on' if AUTO_MENU else 'off'}, "
+          f"off: {DISABLED_REWARDS + DISABLED_PUNISHMENTS or 'nothing'}")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     targets = args or list(TARGETS)
@@ -1170,6 +1190,7 @@ def main():
             sys.exit(f"unknown target {x!r}; choose from {list(TARGETS)}")
     qs, ranges = load_questions()
     print(f"questions: {len(qs)}  (Normal {ranges['N']}, Hard {ranges['H']})  from {os.path.basename(XLSX)}")
+    apply_settings_sheet()
     known = set(json.load(open(os.path.join(HERE, "nonblock_items.json")))) | BLOCK_ITEMS
     os.makedirs(BUILD, exist_ok=True)
     with open(os.path.join(BUILD, "questions_report.txt"), "w", encoding="utf-8") as f:
